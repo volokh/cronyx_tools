@@ -1,0 +1,907 @@
+.TH sconfig 8 "2009-10-29" "Linux system administrator manual" "Cronyx Manual Page"
+.SH NAME
+sconfig \- configuration utility for the Cronyx adapters (version 6.1)
+.SH SYNOPSIS
+.B sconfig
+.RB [ \-raimsxeftucqv ]
+.RB [ "object name " [ "parameter(s)..." ]]
+
+This utility is used for configuring and control the Cronyx Engineering
+adapters. For more detailed information please refer to the
+.I readme.txt
+files.
+.SH DESCRIPTION
+The Cronyx drivers bundle contains several OS kernel source code
+modules and a
+.B sconfig
+control utility. All user (system administrator)
+and driver package interaction is performed via the
+.B sconfig
+utility.
+Moreover, to facilitate usage under the most common configurations, a
+single
+.I /etc/cronyx.conf
+configuration file is provided, and a
+sh-script for processing it, which may be installed into the
+.I /etc/rc.d
+or
+.I /etc/init.d
+subsystem.
+
+The Cronyx driver package includes several "protocol modules", which
+implement interaction between low-level adapter drivers and the
+remaining system components. Binding the "protocol modules" to
+low-level drivers and interface provisioning for centralized control
+are among the tasks of the
+.B binder
+module.
+
+The control of the driver bundle includes loading the needed kernel
+modules, setting the required parameters (for line interfaces, logical
+transmit/receive channels and whole adapters) and assigning
+channel protocols, and configuring the resulting network interfaces.
+
+Protocol modules with network support create usual network
+interfaces in the system. Configuration and interaction with these is
+performed in a common way (using
+.BR ifconfig (8)
+utility, etc.).
+In asynchronous mode all parameters should be set by standard
+.BR stty (1)
+utility, with
+.B sconfig
+you could set only few of them (see below).
+
+Some of the settings could be changed only on free channels, that is the
+corresponding network interface in \fBdown\fP
+state, terminal device
+.I /dev/tty*
+or devnode file descriptor closed.
+Other settings could be changed `the fly'.
+Generally, most of the settings are set up during the operating system startup,
+for example by calling
+.B sconfig
+from the
+.I /etc/rc
+file.
+
+Note, that not all options have a sense for every particular
+case, and an attempt to set some of them can hang up the channel or
+the whole adapter.
+.\"--------------------------------------------------------------
+.SH OPTIONS
+You can specify only one of the following options. If information option is specified,
+.B sconfig
+will show corresponding information and will ignore all other options,
+except \fBobject name\fP, e.g. channel, interface of adapter. See also description of the \fBobject name\fP.
+
+If \fBobject name\fP is not specified, then the corresponding actions will be taken for all
+existing objects.
+
+.IP <none>
+This will show settings of the object.
+.IP -r
+Print current roadmap of objects.
+.IP -a
+Display all configuration information, not only the most significant parameters.
+.IP -i
+Print interface settings, equal to the output of
+.BR ifconfig (1)
+command.
+.IP -m
+Display modem signal state information. The description of all signals can be found in
+any document related to the modems. Only
+.B LE
+(comming from BSD's `Link Enabled' flag) signal should be described. If
+this signal is On, than some what use channel. If it is Off, than channel is
+free.
+.IP -s
+Display brief logical channel statistics.
+This statistics is very useful if something goes wrong. For example, if you
+have no any interrupts on ISA-adapter, than (maybe) selected IRQ is not reserved in BIOS
+for ISA-bus.
+.IP -x
+Display detailed logical channel statistics. This options allows to see some more counters,
+but with less precision than with
+.B -s
+option.
+.IP -e
+Print brief E1/G703 interface statistics. If you select this option, you will get
+statistics accumulated for period of time equal to 15 minutes. For the
+description of output, see below.
+.IP -f
+Print full E1/G703 interface statistics. This option shows all E1/G703 statistics that
+shows previous option \fB-e\fP, but also total statistics for whole period of time and statistics for 24
+hours (if available). For the description of output, see below.
+.IP -t
+Print brief E3/T3/STS-1 interface statistics. If you select this option, you will
+get statistics accumulated for period of time equal to 15 minutes. For
+the description of output, see below.
+.IP -u
+Print full E3/T3/STS-1 interface statistics. This option shows all E3/T3/STS-1
+statistics that shows previous option \fB-t\fP, but also total statistics for whole period of time and statistics for 24
+hours (if available). For the description of output, see below.
+.IP -c
+Cleans all kind of statistics.
+.IP -q
+Be quiet, do not print anything.
+.IP -v
+Show version information.
+.\"--------------------------------------------------------------
+.SH "OBJECT NAME"
+.TP
+.B Important History Note:
+Before version 6.0 of the Cronyx drivers bundle, the old "flat" naming was
+used, when names were assigned to data transmit/receive channels
+only. This scheme was convenient and sufficient, while each data
+channel was directly corresponding to an equipment line interface.
+
+The appearance of new generation adapters (Tau-PCI/2E1, Tau-PCI/4E1,
+and Tau-PCI/32) caused confusion, since logical data channels no longer
+corresponded to line interfaces, and illogicality and ambiguity in
+channel selection were introduced during the line interface
+configuration process.
+
+Thus, starting from version 6.0, a new "hierarchical" naming
+was introduced. The new scheme names and distinguishes several object
+types: \fB`adapter', `interface', `channel'\fP.
+At the same time, each
+object has its own set of configuration parameters. Accordingly, a
+parameter set must be determined for each object, in order to specify
+a complete configuration. At that, more operations are required, but
+there always is complete clearness and unambiguity.
+.LP
+
+Adapters are assigned names in the \fBadapter-type_#\fP
+form, for example,
+`tau32_0', `taupci_0', `tauisa_2', etc.
+
+Line interfaces (e.g. E1, V.35, RS-530, etc.) are assigned names in the
+\fBadapter-name.interface-type_#\fP form. In this form `adapter-name'
+corresponds to the adapter, where the line interface is located. And
+the `interface-type_#' determines interface type and sequential number
+in the adapter. For example, `tau32_0.e1_0', `taupci_0.e1_3',
+`tauisa_0.s_1', etc.
+
+Line interface types are named as follows:
+.TP
+.SB \ \ `s'
+synchronous serial interface;
+.TP
+.SB \ \ `e1'
+E1 interface (ITU-T G.703) with ITU-T G.704 framed mode support;
+.TP
+.SB \ \ `g703'
+ITU-T G.703 interface with unframed mode support only;
+.TP
+.SB \ \ `e3'
+E3 interface;
+.TP
+.SB \ \ `rs232'
+synchronous RS-232;
+.TP
+.SB \ \ `rs449'
+synchronous RS-449;
+.TP
+.SB \ \ `rs530'
+synchronous RS-530;
+.TP
+.SB \ \ `v35'
+synchronous V.35;
+.TP
+.SB \ \ `x21'
+synchronous X.21;
+.TP
+.SB \ \ `a'
+asynchronous serial RS-232 interface;
+.TP
+.SB \ \ `u'
+multi-purpose synchronous/asynchronous interface;
+.LP
+Logical data channels receive names in the
+\fBadapter-name.#\fP
+form, where the corresponding adapter name, in which
+logical channel is located, is specified along with the channel number
+in the adapter. For example, `tau32_0.0', `tau32_0.31', `taupci_1.3',
+etc.
+
+In addition to that, for convenience, logical channels are assigned
+aliases, which are equal to their names in the old naming scheme. This
+allows using shorter names (including those of the resulting network
+interfaces), while simultaneously keeping the maximum compatibility
+with application software designed for the old naming scheme. Logical
+channel aliases have the \fBce#\fP, \fBcp#\fP, \fBct#\fP and \fBcx#\fP
+form for Tau-PCI/32,
+Tau-PCI, Tau-ISA, and Sigma-ISA adapters correspondingly.
+
+The actual available object list may be viewed anytime using the
+.ft I
+.nh
+sconfig\ -r
+.hy
+.ft
+command. Logical channel aliases are displayed with a `/'
+(slash) after the name.
+
+To view the current configuration, you must call the
+.B sconfig
+utility
+with a name of the object of interest. When called without parameters,
+.B sconfig
+displays the main configuration parameters for all available
+objects.
+
+To change configuration, you must supply the
+.B sconfig
+utility, along
+with the \fBobject name\fP, with names of the parameters to be changed, and
+their values in the
+.B parameter=value
+form.
+
+Different sets of parameters are available for adapters, interfaces
+and channels. The set of available parameters in each particular case
+depends on the adapter model, interface type, operating mode, and the
+selected protocol. For example, the `line=' parameter (line encoding)
+is not available for asynchronous interfaces, and the `dpll='
+parameter (enable DPLL) is not available for E1 interfaces. To view
+all parameters applicable to an object, call
+.B sconfig
+with the
+.B -a
+option, specifying the object name.
+.\"--------------------------------------------------------------
+.SH "ADAPTER CONFIGURATION PARAMETERS"
+.TP
+.B adapter=..
+Specifies the operating mode for Tau-ISA and Tau-PCI
+adapters with E1 interfaces, possible values are:
+.TP
+.SB \ \ separate
+independent channel mode, a single logical channel
+corresponds to each line interface;
+.TP
+.SB \ \ mux
+timeslot multiplexing mode between line interfaces and logical channels;
+.TP
+.SB \ \ split
+distribution of E1 interface timeslots between logical transmit/receive channels;
+.TP
+.SB \ \ b-mode
+legacy "B" mode for the Tau-ISA/E1 adapter;
+.TP
+.B led=..
+Specifies the adapter LED indication mode for various
+situations and events. The following options
+combinations are allowed, which must be listed without
+spaces, separated by commas:
+.TP
+.SB \ \ smart
+the default mode,
+the indicator flashes depending on the state of the
+physical interface (loop, loss of carrier, loss of
+frame, etc.);
+.TP
+.SB \ \ on
+the indicator lights continuously;
+.TP
+.SB \ \ off
+the indicator is off;
+.TP
+.SB \ \ #(number)
+a 32-bit value, allowing to specify an arbitrary cadence mode;
+.TP
+.SB \ \ irq
+if specified, the indicator momentarily lights
+(or goes off) during each hardware interrupt from the
+adapter side;
+.TP
+.SB \ \ rx
+if specified, the indicator momentarily lights (or goes
+off) on data packet/chunk receive;
+.TP
+.SB \ \ tx
+if specified, the indicator momentarily lights (or
+goes off) on data packet/chunk transmit;
+.TP
+.SB \ \ err
+if specified, the indicator momentarily lights (or
+goes off) on transmit/receive errors;
+.TP
+.B subchan=..
+Specifies the number of timeslots for the "B" mode
+of the Tau-ISA/E1 adapter.
+.TP
+.B reset
+Software adapter reset, with a complete hardware reset if possible.
+.\"--------------------------------------------------------------
+.SH "LOGICAL CHANNEL CONFIGURATION PARAMETERS"
+.TP
+.B debug=#
+Specifies the debug information display level
+(0..2), "0" - debugging disabled, "2" - maximum
+debug information (for developers);
+.TP
+.B extclock
+Select the external clock mode for serial
+synchronous interfaces (e.g. V.35, RS-530, etc.).
+External clock
+mode is the most common method for connecting external modem hardware (aka DCE). In this
+mode the external timing signal is received on TXCIN pin of the connector,
+and it is used as a synchronization clock for transmitting data (TXD);
+.TP
+.B #(number)
+Specifies the rate, and enables synchronization from
+adapter's internal clock for serial synchronous
+interfaces (e.g. V.35, RS-530, etc.). Zero value is equal to the \fBextclock\fP.
+If case of nonzero value it will cause setting data rate to given value and
+setting the internal clock source of the synchronization (in synchronous mode).
+The transmitted data (TXD) are synchronized using the internal on-board timing
+generator, the internally generated timing signal is driven on the TXCOUT pin,
+and the signal on the TXCIN pin is ignored. This mode is used for direct
+connection of adapter to the terminal (aka DTE), e.g. for connecting two computers together
+in a synchronous mode via relatively short cable. Also internal clock mode should also be used
+for testing channels with an external loopback connector;
+.TP
+.B mtu=#
+Specifies the MTU (Maximum Transmission Unit) size limit;
+.TP
+.B qlen=#
+Specifies the transmit/receive queues length.
+The properly length of queues should be assigned,
+with trade-off between data delaying and possibility of
+underrun/overrun conditions over system's latency of hardware interrupts handling;
+.TP
+.B timeslots=..
+Specifies the timeslot list for channels bonded to E1 interfaces, for example: "ts=1-5,17,19-24";
+.TP
+.B iface=#
+Bind a logical transmit/receive channel to a
+line interface by its sequential number on the
+adapter (0, 1, 2, 3...);
+.TP
+.B mode=..
+Specifies the logical channel operating mode,
+possible values are:
+.TP
+.SB \ \ async
+asynchronous mode (for Sigma-ISA only);
+.TP
+.SB \ \ hdlc
+synchronous mode, HDLC (Layer 2) packet transmit/receive;
+.TP
+.SB \ \ phony
+for Tau-PCI/32 and Tau-PCI adapters with E1
+interfaces, direct data exchange in transparent (aka "telephone")
+mode;
+.TP
+.B crc=..
+Specifies the kind of Frame Check Sequence (FCS) for HDLC, possible values are:
+.TP
+.SB \ \ none
+no FCS generation or checking (0 bytes FCS), only for Tau-PCI/32;
+.TP
+.SB \ \ 16
+use the 16-bit CRC (2 bytes FCS of ITU-T Q.921);
+.TP
+.SB \ \ 32
+use the 32-bit CRC (4 bytes FCS), only for Tau-PCI/32;
+.\"--------------------------------------------------------------
+.SH "PROTOCOL MODULES CONFIGURATION PARAMETERS"
+.TP
+.B dlci=#
+When using the Frame Relay protocol module, adds a
+PVC (Permanent Virtual Circuit) with a specified
+DLCI number;
+.TP
+.B qlen-limit=#
+When using the zaptel protocol, sets the limit for automatic increase in length
+of receive/transmit queues as a result of overrun/underrun detection;
+.TP
+.B ec-delay=#
+When using the zaptel protocol, sets the delay in milliseconds (to within 0.125 мс)
+in submission of the signal transferred into E1-line
+on an input of a echo-canceller feedback. The form ec-delay=auto is supposed,
+adequate value proceeding from current value of parameter qlen will be as a result established.
+For example: "ec-delay=3.125" or "ec-delay=auto";
+.\"--------------------------------------------------------------
+.SH "LINE INTERFACE CONFIGURATION PARAMETERS"
+.TP
+.B loop=..
+Select a loopback mode, possible
+values:
+.TP
+.SB \ \ off
+normal mode, all loops disabled;
+.TP
+.SB \ \ internal
+internal loop, the data transmitted
+into the line are received back;
+.TP
+.SB \ \ mirror
+external loop, the data received from the line
+are transmitted (mirrored) back into the line;
+.TP
+.SB \ \ remote
+request to the remote side to enable
+return for data received from our side;
+.TP
+.B dpll=on/off
+Enables DPLL on serial synchronous interfaces
+for clock regeneration according to the received
+data;
+.TP
+.B line=..
+Line code selection, possible values depend on
+the line interface type:
+.TP
+.SB \ \ nrz
+the NRZ code, for serial synchronous interfaces;
+.TP
+.SB \ \ nrzi
+the NRZI code, for serial synchronous interfaces;
+.TP
+.SB \ \ hdb3
+the HDB3 code, for E1 and G.703 interfaces;
+.TP
+.SB \ \ ami
+the AMI code, for E1 and G.703 interfaces;
+.TP
+.B invclk=..
+For serial synchronous interfaces, the clock
+inversion mode, possible values are:
+.TP
+.SB \ \ normal/off
+normal mode;
+.TP
+.SB \ \ rx-only
+inversion of only receive (RXC/ERC) clock,
+supported by Tau-PCI series adapters only;
+.TP
+.SB \ \ tx-only
+inversion of only transmit (TXC/ETC) clock,
+supported by Tau-PCI series adapters only;
+.TP
+.SB \ \ both/on
+inversion of both transmit and receive clock;
+.TP
+.B higain=on/off
+For E1 interfaces, enable receiver
+high-gain mode. This allows increasing the
+distance over an E1 line to 2.5 km (over a 0.6
+mm2 section twisted pair);
+.TP
+.B monitor=on/off
+For E1 interfaces, enable line monitoring
+(listening-in) mode via high-resistance resistors;
+.TP
+.B unframed=on/off
+For E1 interfaces, enable the unframed
+E1 mode (with/without G.704 timeslot structure);
+.TP
+.B scrambler=on/off
+For E1 interfaces, enable scrambler in
+the E1 unframed mode;
+.TP
+.B cas=..
+For E1 interfaces, specified the CAS
+(Channel Associated Signaling) processing mode,
+possible values are:
+.TP
+.SB \ \ off
+no CAS-type signaling, the 16-th timeslot is
+available for transmitting data or CCS-type
+signaling;
+.TP
+.SB \ \ set
+Incoming CAS is monitored, but is
+substituted for transmission (no need to create
+CAS-payload);
+.TP
+.SB \ \ pass
+Incoming CAS is monitored, and is
+transmitted "as is" from the corresponding
+logical channel;
+.TP
+.SB \ \ cross
+cross-switching of CAS by means of a hardware
+cross-connector, in parallel with timeslot's
+payload switching;
+.TP
+.B crc4=on/off
+For E1 interfaces, enable CRC4 multiframes;
+.TP
+.B clock=..
+For E1 interfaces, specified the
+transmitter synchronization mode, and when
+operating in the multiplexer mode - the whole
+transmit/receive path synchronization
+mode, possible values are:
+.TP
+.SB \ \ internal
+synchronization from an internal clock;
+.TP
+.SB \ \ receive
+synchronization from the receiving path, by the
+frequency recovered from the line;
+.TP
+.SB \ \ rcv0
+synchronization from the receiving path of
+physical interface #0;
+.TP
+.SB \ \ rcv1
+synchronization from the receiving path of
+physical interface #1;
+.TP
+.SB \ \ rcv2
+synchronization from the receiving path of
+physical interface #2;
+.TP
+.SB \ \ rcv3
+synchronization from the receiving path of
+physical interface #3;
+.\"--------------------------------------------------------------
+.SH "PROTOCOL SELECTION"
+.TP
+.B idle
+No protocol (detach any protocol module);
+.TP
+.B async
+Asynchronous protocol without network support, for
+Sigma-ISA series adapters only. When a protocol is
+selected, entries for channel access are automatically
+created in \fI/dev/*\fP;
+.TP
+.B sync
+Synchronous tty interface support without direct network
+support. Allows using standard system tools (pppd) to
+implement network interaction. When a protocol is
+selected, entries for channel access are automatically
+created in \fI/dev/*\fP;
+.TP
+.B cisco
+Cisco HDLC protocol, creates a point-to-point network interface;
+.TP
+.B rbrg
+Remote Ethernet bridge protocol. A similar ones or a
+compatible device must operate on the opposite side of the
+channel (e.g. Cronyx RBRG, PCM2L, PCM2D, E1-L,
+E1-XL device with ETV or ETH module). A full Ethernet bridge is formed
+together with the correspondent, and an
+Ethernet-compatible interface is created;
+.TP
+.B fr
+Frame Relay protocol support (ANSI T1.167 Annex D). To
+create network point-to-point interfaces, use the dlci=#
+parameter to add PVCs with required DLCI numbers;
+.TP
+.B raw
+Direct data exchange support for user programs. Both
+HDLC-packet exchange, and "raw data" exchange in the
+transparent (aka telephone) mode are possible. When a protocol
+is selected, entries for channel access are automatically
+created in \fI/dev/cronyx/*\fP;
+.TP
+.B packet
+Implements the transmit/receive mode for user
+programs with aggregating small data portions into HDLC
+packets, allowing to decrease overhead. When a protocol is
+selected, entries for channel access are automatically
+created in \fI/dev/cronyx/*\fP;
+.TP
+.B zaptel
+Implements a Zaptel-compatible interface for open IP-PBX
+Asterisk. A Zaptel-stack must be installed in order to
+build and load the module;
+.LP
+Before selecting a protocol, the corresponding protocol module must be
+loaded.
+When connecting a protocol module to a logical channel, separate
+parameters may be configured. In this way, for example, almost all
+protocol modules set the channel operating mode (e.g. async/hdlc/phony).
+
+After connecting a protocol module to a logical channel, some
+parameters may become unchangeable. For example, the zaptel protocol
+prohibits changes to the timeslot list, many protocol modules do not
+allow changing the MTU and the channel operating mode
+(e.g. async/hdlc/phony). Thus it is recommended to assign the channel
+protocol as the last parameter during configuration using the
+.B sconfig
+utility. After specifying the protocol, only DLCI numbers must be
+specified (the dlci=# parameter) when using the Frame Relay protocol.
+.\"--------------------------------------------------------------
+.SH FILES
+.I /etc/cronyx.conf
+.br
+.I /sbin/cronyx.start
+(symlink)
+.br
+.I /sbin/cronyx.stop
+(symlink)
+.br
+.I /sbin/cronyx.restart
+(symlink)
+.br
+.RS
+To facilitate operations this system wide configuration file is
+provided, along with a sh-script for its processing.
+.RE
+
+After specifying the required configuration, it is possible to load
+drivers, and apply settings using the
+.I cronyx.start
+command. Channels
+may be stopped and drivers unloaded using the
+.I cronyx.stop
+command.
+
+During installation, the
+.B cronyx.sh
+sh-script (included with the
+driver package) will be installed as one of the system initialization
+commands. This script will also be executed when calling the
+.I cronyx.start
+and
+.I cronyx.stop
+commands.
+
+Depending on the execution mode,
+.B cronyx.sh
+performs the analysis of
+configuration parameters specified in
+.I /etc/cronyx.conf
+and
+translates them into the corresponding
+\fBsconfig\fP, \fBifconfig\fP,
+etc. utility calls. It also loads (or unloads) kernel modules from the
+driver package.
+
+It is important to understand that the
+.I /etc/cronyx.conf
+file, and the
+.B cronyx.sh
+sh-script for its processing are designed for the most
+common, simplest configurations. In case the included capabilities are
+not enough, the
+.B sconfig
+utility must be used.
+
+The configuration in the
+.I /etc/cronyx.conf
+file is specified in the
+form of
+.B object-name=value
+pairs, in the
+.BR sh (1)
+syntax. Where
+.B object-name
+must correspond to adapter, hardware interface of
+channel name. And
+.B value
+specifies configuration as a parameter list
+in the
+.B sconfig
+utility syntax. In the channel configuration, the local
+and/or remote IP-addresses or the local MAC-address must be specified
+for some protocols. DLCI numbers for Frame Relay (the dlci=#
+parameter) must be specified after protocol selection, and the
+corresponding local and remote IP-addresses - after each DLCI.
+
+.B ATTENTION!!!
+.br
+Since interface and channel names may contain the `.' symbol, and
+due to limitations of the
+.BR sh (1)
+language syntax, in the
+.I /etc/cronyx.conf
+file, the `\fB.\fP' (dot) must be replaced with an `\fB_\fP'
+(underscore).
+
+Edit the
+.I /etc/cronyx.conf
+according to your needs. The comments
+contain typical configuration examples. The list of possible
+parameters and their values are given in the
+.B sconfig
+utility description, see above and \fIreadme.txt\fP.
+.\"--------------------------------------------------------------
+.SH EXAMPLES
+.TP
+.B sconfig tau32_0 led=on clock=rcv1
+Controlling adapter Tau-PCI/32 #0, turn on the LED, and set the clock
+source from the E1-interface #1 receiver.
+.TP
+.B sconfig tau32_0.e1_1 unframed=off crc4=on cas=off
+Controlling E1-interface #1 in adapter Tau-PCI/32 #0, enable the
+framed mode, CRC4 multiframes, and disable CAS.
+.TP
+.B sconfig tau32_0.10 ts=4-8 iface=1 rbrg
+Controlling channel #10 on adapter Tau-PCI/32, assign timeslots on
+E1-interface #1, enable the Ethernet bridge protocol module.
+.TP
+.B sconfig cp1 ts=1-31 mode=phony qlen=2 zaptel
+Controlling channel #1 on the Tau-PCI/xE1 adapter, select the timeslot
+set, and enable the zaptel-protocol, set the transmission queue length
+to 2.
+.TP
+.B sconfig cx1 sync extclock
+Set up the channel #1 on Sigma-ISA for use with the HDSL modem or any other
+synchronous leased-line modem, and prepare for PPP/HDLC protocol.
+Don't forget to start
+.B pppd
+and configure the network interface.
+.TP
+.B sconfig ct0 cisco ts=1-10
+Set up the channel #0 of Tau-ISA/E1 for use with the Cisco/HDLC protocol
+over E1 line, using timeslots 1-10.
+Don't forget to configure the network interface `ct0'.
+.TP
+.B sconfig ct0 cisco 256000
+Set up the channel #0 on Tau-ISA for the synchronous null-modem line to the nearby computer,
+internal clock source, 256 kbps, protocol Cisco/HDLC.
+Don't forget to configure the network interface `ct0'.
+.TP
+.B sconfig cx1 sync 128000 line=nrzi dpll=on
+Set up the channel #1 on Sigma-ISA for the leased line using data-only
+null-modem cable (or modems like Zelax M115). Synchronous DPLL mode, 128
+kbps, prepare for protocol PPP/HDLC, NRZI encoding.
+Don't forget to start
+.B pppd
+and configure the network interface.
+.\"--------------------------------------------------------------
+.SH DIAGNOSTICS
+This section contains description of abbreviations used by
+.B sconfig
+while displaying various statistics. For description of options connected with
+statistics see above.
+.LP
+.\"--------------------------------------------------------------
+.B LOGICAL CHANNEL STATISTICS
+.br
+When running, the driver gathers the statistics about the channels, which
+could be accessed via
+.B sconfig
+utility or by
+.BR ioctl (2)
+.TP
+.B Rintr
+The total number of receive interrupts.
+.TP
+.B Tintr
+The total number of transmit interrupts.
+.TP
+.B Mintr
+The total number of modem interrupts.
+.TP
+.B Ibytes
+The total bytes received.
+.TP
+.B Ipkts
+The total packets/chunks received, unavailable for asynchronous mode.
+.TP
+.B Ierrs
+The number of receive errors.
+.TP
+.B Obytes
+The total bytes transmitted.
+.TP
+.B Opkts
+The total packets/chunks transmitted, unavailable for asynchronous mode.
+.TP
+.B Oerrs
+The number of transmit errors.
+.LP
+.\"--------------------------------------------------------------
+.B E1/G.703 INTERFACE STATISTICS
+.br
+For E1 and G.703 interfaces the SNMP-compatible statistics data are gathered
+(see RFC 1406).
+.TP
+.B Unav (uas)
+Unavailable seconds - receiving AIS (all ones) or LOS (loss of signal) condition.
+.TP
+.B Degr (dm)
+Degraded minutes - having error rate more than 10e-6, not counting unavailable
+and severely errored seconds.
+.TP
+.B Bpv (bpv)
+HDB3 bipolar violation errors.
+.TP
+.B Fsyn (fse)
+Frame synchronization errors (E1 only).
+.TP
+.B CRC (crce)
+CRC4 errors (E1).
+.TP
+.B RCRC (rcrce)
+Remote CRC4 errors: E-bit counter (E1).
+.TP
+.B Err (es)
+Errored seconds - any framing errors, or out of frame sync, or any slip events.
+.TP
+.B Lerr (les)
+Line errored seconds - any BPV.
+.TP
+.B Sev (ses)
+Severely errored seconds - 832 or more framing errors, or 2048 or more bipolar
+violations.
+.TP
+.B Bur (bes)
+Bursty errored seconds - more than 1 framing error, but not severely errored.
+.TP
+.B Oof (oofs)
+Out of frame sync seconds - seconds without frame sync.
+.TP
+.B Slp (css)
+Controlled slip second -- any slip buffer overflow or underflow.
+.LP
+.\"--------------------------------------------------------------
+.B E1/G.703 INTERFACE STATUS
+.br
+.B sconfig
+utility also prints the E1/G.703 interface status. The status could have the
+following values (nonexclusive):
+.TP
+.B OK
+The interface is in valid state, synchronized.
+.TP
+.B LOS
+Loss of signal (no HDB3 carrier, or more than 2048 zeros with AMI). According to ITU-T G.775 and ITU-T G.962.
+.TP
+.B AIS
+Receiving unframed all ones (framed mode only). According to ITU-T O.162 section 1.6.1.2.
+.TP
+.B LOF
+Loss of framing (framed mode only). According to ITU-T G.706 sections 4.1.1, 4.1.2 and 4.3.2.
+.TP
+.B LOMF
+Loss of CAS multiframing (framed mode with CAS only). According to ITU-T G.732 section 5.2.
+.TP
+.B CRC4E
+Loss of CRC4 multiframing (framed mode with CRC4 only). According to ITU-T G.706 section 4.2.
+.TP
+.B FARLOF
+Receiving remote alarm (framed mode only). According to ITU-T O.162 section 2.1.4.
+.TP
+.B AIS16
+Receiving all ones in timeslot 16 (framed mode with CAS only). According to ITU-T G.732 section 4.2.
+.TP
+.B FARLOMF
+Receiving distant multiframe alarm (framed mode with CAS only). According to ITU-T O.162 section 2.1.5.
+.LP
+.\"--------------------------------------------------------------
+.SH HISTORY
+This utility is a replacement of utilities
+.B cxconfig
+and
+.B ctconfig
+that was used in past with Cronyx drivers for FreeBSD. Those two utilities and the present
+utility are not compatible. And therefore all scripts should be rewritten. Moreover,
+Linux and FreeBSD version of present utility not fully compatible.
+
+Also, the version 6.0 is significantly different from all earlier.
+This manual can be used only with version 6.0,
+all prior versions currently has no support by Cronyx Engineering.
+.\"--------------------------------------------------------------
+.SH BUGS
+All software produced by Cronyx Engineering is thoroughly tested. But
+as created by the man it can contain some `bugs'
+If you have caught one, try to localize it and send a letter with description
+of this bug and all operation that you have done. We will try to reproduce
+an error and fix it.
+.\"--------------------------------------------------------------
+.SH "SEE ALSO"
+.BR stty (1),
+.BR ioctl (2),
+.BR pppd (8),
+.BR ifconfig (8),
+.BR route (8)
+.\"--------------------------------------------------------------
+.SH AUTHOR
+Leo Yuriev <ly@cronyx.ru>
+.SH CONTACT
+E-mail: info@cronyx.ru
+.br
+http://www.cronyx.ru
+.br
++7 (499) 946-99-90
