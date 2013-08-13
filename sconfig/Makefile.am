@@ -26,7 +26,7 @@ sconfig_LDADD=libsconfig.la
 
 #includedir=/usr/include/linux/cronyx
 includedir=/usr/include/cronyx
-include_HEADERS=sconfig.h
+include_HEADERS=sconfig.h cserial.h
 
 #$(ETC)/cronyx.conf:
 #		@echo "INSTALL $@"
