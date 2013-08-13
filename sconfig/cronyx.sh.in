@@ -1,0 +1,473 @@
+#!/bin/sh
+# cronyx             Load/unload the Cronyx drivers, configure network interfaces, start/stop PPP daemons, apply parameters from /etc/cronyx.conf
+# chkconfig:         2345 14 29
+# description:	     Loads modules for Cronyx adapters and brings up interfaces
+#
+# config:            /etc/cronyx.conf
+
+### BEGIN INIT INFO
+# Provides:          cronyx
+# Required-Start:    $local_fs udev @DAHDI@
+# Required-Stop:     $local_fs @DAHDI@
+# Should-Start:      $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: loads modules for Cronyx adapters and brings up interfaces
+# Description:       Load/unload the Cronyx drivers, configure network interfaces, start/stop PPP daemons, apply parameters from /etc/cronyx.conf
+### END INIT INFO
+
+#
+# $Id: cronyx.sh.in,v 1.33 2009-10-08 15:10:48 ly Exp $
+#
+# Copyright (C) 1999-2002 Cronyx Engineering.
+# Author: Serge Vakulenko <vak@cronyx.ru>
+#
+# Copyright (C) 2000 Cronyx Engineering.
+# Add rbrg support: Victor Cherkashin <vich@cronyx.ru>
+#
+# Copyright (C) 2001-2005 Cronyx Engineering.
+# Author: Roman Kurakin <rik@cronyx.ru>
+#
+# Copyright (C) 2006-2009 Cronyx Engineering.
+# Author: Leo Yuriev <ly@cronyx.ru>
+#
+# Usage:
+#    cronyx start - load the drivers modules, up interfaces
+#    cronyx stop  - down interfaces, unloads the drivers modules
+#
+
+NAME=cronyx
+SCRIPTNAME=/etc/init.d/$NAME
+PATH=@prefix@bin:/sbin:/bin:/usr/bin:/usr/sbin
+LIBMOD=
+MODEXT=
+PPPD_OPTS="persist noauth"		# "-am -vj -ac -pc"
+DEVFS=`mount -t devfs | sed "s/^\(devfs[[:space:]]\+on[[:space:]]\+\/dev\).*$/\1/g"`
+
+if [ ! -f /etc/cronyx.conf ]; then
+	exit 0
+fi
+. @prefix@etc/cronyx.conf
+
+run_cmd () {
+	# Uncomment this for debug.
+	# echo "cronyx.trace: " $*
+	$*
+}
+
+# Check that the module is already loaded
+mod_test () {
+	grep -q "^$1 " /proc/modules
+}
+
+mod_load () {
+	for i in cbinder ${cronyx_modules}; do
+		if [ "${i}" != "${1}" ]; then
+			continue
+		elif [ -z "${LIBMOD}" -a -z "${MODEXT}" ]; then
+			run_cmd modprobe ${modprobe_param} $@
+		else
+			mod=${LIBMOD}${1}${MODEXT}
+			shift
+			run_cmd insmod $mod $@
+		fi
+		break
+	done
+}
+
+mod_probe () {
+	mod_test $1 || mod_load $@
+}
+
+mod_unload () {
+	mod_test $1 && run_cmd rmmod $1
+}
+
+down_iface () {
+	ip_local=
+	ip_remote=
+	for ip in `ifconfig $1 2>&- | tr -s -c '[0-9.]' ' '`; do
+		case "$ip" in
+		[0-9]*.[0-9]*.[0-9]*.[0-9]*)
+			if [ -z "$ip_local" ]; then
+				ip_local="$ip"
+			elif [ -z "$ip_remote" ]; then
+				ip_remote="$ip"
+			fi
+			;;
+		esac
+	done
+	if [ -n "$ip_local" ]; then
+		run_cmd route del "$ip_local" 2>&-
+	fi
+	if [ -n "$ip_remote" ]; then
+		run_cmd route del "$ip_remote" 2>&-
+	fi
+	run_cmd ifconfig $1 down
+}
+
+kill_pppd () {
+	# Kill all ppp daemons.
+	check=no
+	for pid in `pidof pppd`; do
+		proc=`ps h $pid | grep 'pppd /dev/cronyx/.*'`
+		if [ -n "$proc" ]; then
+			echo Terminating "($pid)" $proc...
+			kill -15 $pid
+			check=yes
+		fi
+		proc=`ps h $pid | grep 'pppd /dev/ttyZ.*'`
+		if [ -n "$proc" ]; then
+			echo Terminating "($pid)" $proc...
+			kill -15 $pid
+			check=yes
+		fi
+	done
+	if [ $check = yes ]; then
+		sleep 1
+		for pid in `pidof pppd`; do
+			proc=`ps h $pid | grep 'pppd /dev/cronyx/.*'`
+			if [ -n "$proc" ]; then
+				echo Killing "($pid)" $proc...
+				kill -9 $pid
+			fi
+			proc=`ps h $pid | grep 'pppd /dev/ttyZ.*'`
+			if [ -n "$proc" ]; then
+				echo Killing "($pid)" $proc...
+				kill -9 $pid
+			fi
+		done
+	fi
+}
+
+clear_devfs () {
+	# Clear /dev in case of devfs
+	if [ "$DEVFS" = "devfs on /dev" ]; then
+		run_cmd rm -f /dev/ttyQ* /dev/cuq* /dev/ttyZ*
+	fi
+	run_cmd rm -rf /dev/cronyx
+}
+
+cronyx_stop () {
+	sync
+	kill_pppd
+
+	# Down every channel...
+	for chan in `sconfig --list-channels 2>&-`; do
+		chan_config=`sconfig $chan`
+		chan_proto=`echo $chan_config | cut -d ' ' -f 2`
+		case "$chan_proto" in
+		idle)
+			continue
+			;;
+		fr)
+			for dlci in `ifconfig -a | tr -s '[:blank:]' ' ' | cut -d ' ' -f 1`; do
+				case "$dlci" in
+				${chan}d[0-9]*)
+					down_iface $dlci
+					;;
+				esac
+			done
+			;;
+		cisco | rbrg)
+			down_iface $chan
+			;;
+		esac
+		run_cmd sconfig -q $chan idle
+	done
+
+	# Unload the drivers.
+	mod_unload cx
+	mod_unload ct
+	mod_unload cp
+	mod_unload ce
+	mod_unload cdahdi
+	mod_unload czaptel
+	mod_unload cfr
+	mod_unload casync
+	mod_unload csync
+	mod_unload ccisco
+	mod_unload craw
+	mod_unload cpacket
+	mod_unload crbrg
+	mod_unload cbinder
+
+	clear_devfs
+}
+
+cronyx_start () {
+	sync
+	kill_pppd
+	clear_devfs
+
+	# Binder - glue between protocols and adapters.
+	mod_probe cbinder
+
+	# Adapters.
+	mod_probe cp
+	mod_probe ce
+	mod_probe cx port="${sigma_ports:-0}" irq="${sigma_irq:-0}" dma="${sigma_dma:-0}"
+	mod_probe ct port="${tau_ports:-0}" irq="${tau_irq:-0}" dma="${tau_dma:-0}"
+
+	# For every adapter...
+	for adapter in `sconfig --list-adapters 2>&-`; do
+		shell_name=`echo $adapter | tr '.' '_'`
+		eval user_config="\${$shell_name}"
+		if [ -z "$user_config" ]; then
+			continue
+		fi
+		run_cmd sconfig -q $adapter $user_config
+	done
+
+	# For every interface...
+	for interface in `sconfig --list-interfaces 2>&-`; do
+		shell_name=`echo $interface | tr '.' '_'`
+		eval user_config="\${$shell_name}"
+		if [ -z "$user_config" ]; then
+			continue
+		fi
+		run_cmd sconfig -q $interface $user_config
+	done
+
+	# For every channel...
+	for chan in `sconfig --list-channels 2>&-`; do
+		shell_name=`echo $chan | tr '.' '_'`
+		chan_fullname=`sconfig $chan 2>&- | cut -d '/' -f 1`
+		if [ -z "$chan_fullname" ]; then
+			echo $chan: does not exists
+			continue
+		fi
+
+		# Parse the channel configuration parameters.
+		eval user_config="\$${shell_name}"
+		if [ -z "$user_config" ]; then
+			shell_name=`echo $chan_fullname | tr '.' '_'`
+
+			# Looking for config by fullname, but not by nick
+			eval user_config="\${$shell_name}"
+			if [ -z "$user_config" ]; then
+				continue
+			fi
+		fi
+		myaddr=
+		hwether=
+		hwaddr=
+		peeraddr=
+		config=
+		proto=
+		proto_config=
+		debug=
+		dlci=
+		dlci_list=
+		ppp=N
+		p=0
+		for p in $user_config; do
+			case "$p" in
+			[0-9]*.[0-9]*.[0-9]*.[0-9]*)
+				if [ -z "$proto" ]; then
+					echo "$chan: ip-address(es) must be specified after protocol"
+				elif [ "$proto" = "fr" -a -z "$dlci" ]; then
+					echo "$chan: ip-address(es) must be specified after DLCI"
+				fi
+				if [ -z "$myaddr" ]; then
+					myaddr="$p"
+					eval ${dlci}_myaddr="$p"
+				elif [ -z "$peeraddr" ]; then
+					peeraddr="$p"
+					eval ${dlci}_peeraddr="$p"
+				else
+					echo $chan: "$p" excessive address
+				fi
+				;;
+			[0-9A-Fa-f]*:[0-9A-Fa-f]*:[0-9A-Fa-f]*:[0-9A-Fa-f]*:[0-9A-Fa-f]*:[0-9A-Fa-f]*)
+				hwether="hw ether"
+				hwaddr="$p"
+				;;
+			async | mode=async)
+				proto=async
+				;;
+			sync | sppp | stty | hdlc)
+				proto=sync
+				;;
+			ppp)
+				ppp=Y
+				if [ -z "$proto" ]; then proto=idle; fi
+				;;
+			fr | cisco | raw | packet | rbrg | zaptel | dahdi | idle)
+				proto="$p"
+				;;
+			qlen-limit=* | ec-delay=* | crc=*)
+				proto_config="$proto_config $p"
+				;;
+			dlci*)
+				proto_config="$proto_config $p"
+				dlci="`expr $p : 'dlci=\(.*\)'`"
+				dlci_list="$dlci_list $dlci"
+				dlci="dlci$dlci"
+				myaddr=
+				peeraddr=
+				;;
+			debug*)
+				config="$config $p"
+				debug=debug
+				;;
+			*)
+				config="$config $p"
+				;;
+			esac
+		done
+
+		# Load protocol modules.
+		case "$proto" in
+		async)
+			mod_probe casync || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			config="mode=async $config"
+			;;
+		sync)
+			mod_probe csync || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			config="mode=hdlc $config"
+			;;
+		cisco)
+			mod_probe ccisco || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		rbrg)
+			mod_probe crbrg || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		fr)
+			mod_probe cfr || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		dahdi)
+			mod_probe cdahdi || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		zaptel)
+			mod_probe czaptel || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		raw)
+			mod_probe craw || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		packet)
+			mod_probe cpacket || echo "$chan: protocol module for '$proto' does not exist, check if it installed"
+			;;
+		idle)
+			;;
+		"")
+			echo $chan: no protocol specified
+			continue
+			;;
+		esac
+
+		# Configure the hardware.
+		if !(run_cmd sconfig -q $chan $config $proto $proto_config); then
+			continue
+		fi
+
+		# PPP auto-mode
+		if [ "$ppp" = "Y" ]; then
+			if [ "$proto" = "idle" ]; then
+				if sconfig -a $chan 2>&- | grep -q mode=hdlc; then
+					mod_probe csync || echo "$chan: protocol module for 'sync' does not exist, check if it installed"
+					if !(run_cmd sconfig -q $chan sync); then
+						continue
+					fi
+					proto=sync
+				elif sconfig -a $chan 2>&- | grep -q mode=async; then
+					mod_probe casync || echo "$chan: protocol module for 'async' does not exist, check if it installed"
+					if !(run_cmd sconfig -q $chan async); then
+						continue
+					fi
+					proto=ppp
+				else
+					mod_probe craw || echo "$chan: protocol module for 'raw' does not exist, check if it installed"
+					if !(run_cmd sconfig -q $chan raw); then
+						continue
+					fi
+					proto=ppp
+				fi
+			elif [ "$proto" != "sync" ]; then
+				proto=ppp
+			fi
+		fi
+
+		# Activate the network interface.
+		case "$proto" in
+		ppp | sync)
+			addr=
+			if [ -n "$myaddr" -o -n "$peeraddr" ]; then
+				addr="$myaddr:$peeraddr"
+			fi
+			if [ "$proto" = "sync" ]; then
+				mtu=`sconfig -a $chan | tr -s '[:space:]' '\n' | grep mtu | tr -cd '[:digit:]'`
+				if [ -z "$mtu" ]; then
+					mtu=1500
+				fi
+				mtu=`expr $mtu - 4`
+				run_cmd pppd /dev/cronyx/$chan sync ${PPPD_OPTS} mru $mtu mtu $mtu $addr $debug
+			else
+				run_cmd pppd /dev/cronyx/$chan ${PPPD_OPTS} $addr $debug
+			fi
+			;;
+		cisco)
+			if [ -z "$myaddr" ]; then
+				echo $chan: no local ip address specified
+				continue
+			fi
+			if [ -z "$peeraddr" ]; then
+				echo chan: no remote ip address specified
+				continue
+			fi
+			run_cmd ifconfig $chan "$myaddr" pointopoint "$peeraddr" up
+			;;
+		rbrg)
+			if [ -z "$myaddr" ]; then
+			run_cmd ifconfig $chan $hwether $hwaddr up
+				continue
+			fi
+			if [ -z "$peeraddr" ]; then
+				run_cmd ifconfig $chan $hwether "$hwaddr" "$myaddr"
+				continue
+			fi
+			run_cmd ifconfig $chan $hwether $hwaddr "$myaddr" netmask "$peeraddr"
+			;;
+		fr)
+			# For every DLCI...
+			for dlci in $dlci_list; do
+				ifdlci_name="$chan"d$dlci
+				eval myaddr=\$dlci${dlci}_myaddr
+				eval peeraddr=\$dlci${dlci}_peeraddr
+				if [ -z "$myaddr" ]; then
+					echo $ifdlci_name: no local ip address specified
+					continue
+				fi
+				if [ -z "$peeraddr" ]; then
+					echo $ifdlci_name: no remote ip address specified
+					continue
+				fi
+				run_cmd ifconfig $ifdlci_name "$myaddr" pointopoint "$peeraddr"
+			done
+			;;
+		esac
+	done
+}
+
+action=start
+if [ "$1" = "stop" -o "`basename $0`" = cronyx.stop ]; then
+	action=stop
+elif [ "$1" = "restart" -o "`basename $0`" = cronyx.restart ]; then
+	action=restart
+elif [ "$1" = "reload" -o "`basename $0`" = cronyx.reload ]; then
+	action=reload
+fi
+
+case "$action" in
+	start)
+		cronyx_start
+		;;
+	stop)
+		cronyx_stop
+		;;
+	reload | restart)
+		cronyx_stop
+		cronyx_start
+		;;
+esac
+exit 0

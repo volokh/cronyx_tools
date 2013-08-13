@@ -1,0 +1,53 @@
+#
+# /etc/cronyx.conf - configuration of Cronyx serial adapters
+#
+# $Id: cronyx.conf.in,v 1.14 2009-03-03 10:19:39 ly Exp $
+#
+
+# List of modules to load
+cronyx_modules="@mod_load@"
+
+# protocol PPP, get IP addresses from the peer
+#<channel-name>="ppp"
+
+# protocol PPP, use static IP addresses
+#<channel-name>="ppp 200.0.0.1 200.0.0.2"
+
+# protocol Frame Relay, two DLCIs
+#<channel-name>="fr dlci=16 100.0.0.1 100.0.0.2 dlci=17 200.0.0.1 200.0.0.2"
+
+# protocol Cisco/HDLC
+#<channel-name>="cisco 100.0.0.1 100.0.0.2"
+
+# Asynchronous protocol, 9600 baud
+#<channel-name>="async 9600"
+
+# Raw packet protocol, for developers only
+# An example of using DPLL connection, with NRZI encoding.
+#<channel-name>="raw 128000"
+
+# raw packet protocol, for telephony applications
+#<channel-name>="mode=phony raw ts=1-31"
+
+# Remote bridge (default MAC address)
+#<channel-name>="rbrg 201.0.0.1 255.255.255.0"
+
+# Remote bridge (set MAC address)
+#<channel-name>="rbrg 202.0.0.1 255.255.255.0 00:50:C2:06:2E:35"
+
+# for Asterisk
+#<channel-name>="dahdi ts=1-31"
+
+# Base port addresses, autoprobe by default.
+#sigma_ports=0x240,0x260,0x300
+#tau_ports=0x240,0x260,0x300
+
+# Interrupt numbers, autoprobe by default.
+# Do not forget to mark these IRQs as 'Legacy ISA' in BIOS Setup.
+#sigma_irq=5,10,11
+#tau_irq=5,10,11
+
+# DMA numbers, autoprobe by default.
+# Do not forget to mark these DMAs as 'Legacy ISA' in BIOS Setup.
+#sigma_dma=7,6,5
+#tau_dma=5,6,7
