@@ -1,0 +1,30 @@
+# Files that are generated as part of the build process which we do not want git
+# to track.
+
+*.[oa]
+.deps
+.libs
+*~
+Makefile
+Makefile.in
+aclocal.m4
+autogen*
+ar-lib
+autom4te.cache/
+compile
+config.*
+configure
+depcomp
+install-sh
+ltmain.sh
+missing
+expansions.m4
+libtool
+*.la
+*.lo
+m4
+
+cronyx.conf
+cserial.h
+cronyx.sh
+sconfig
