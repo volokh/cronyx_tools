@@ -10,7 +10,7 @@
 GDEBUG=-ggdb -g3 -ggdb3
 AM_CFLAGS=-W -Wall -fstack-protector -pipe -fPIC ${GDEBUG}
 
-ACLOCAL_AMFLAGS=-I m4
+
 
 lib_LTLIBRARIES=libsconfig.la
 

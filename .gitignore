@@ -1,5 +1,11 @@
-# Files that are generated as part of the build process which we do not want git
-# to track.
+#***************************************************************************
+#*   Copyright (C) 2013 by Volokh                                          *
+#*   <volokh84@gmail.com>                                                  *
+#*                                                                         *
+#*   This program is under GPL 2 licence you may redistribute it and/or    *
+#*   modify                                                                *
+#*   Ligovskii Pr 203-207, StPetersburg, HomeWork, Russia                  *
+#***************************************************************************
 
 *.[oa]
 .deps
