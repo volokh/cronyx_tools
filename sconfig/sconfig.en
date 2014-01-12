@@ -1,4 +1,4 @@
-.TH sconfig 8 "2009-10-29" "Linux system administrator manual" "Cronyx Manual Page"
+.TH sconfig 8 "2013-08-28" "Linux system administrator manual" "Cronyx Manual Page"
 .SH NAME
 sconfig \- configuration utility for the Cronyx adapters (version 6.1)
 .SH SYNOPSIS
